@@ -15,7 +15,8 @@ async function getXp(interaction) {
   const tables = await getAllUserTables(db);
 
   const start = parseDiscordTimestamp(interaction.options.getString("start"));
-  const end = parseDiscordTimestamp(interaction.options.getString("end"));
+  const endInput = interaction.options.getString("end");
+  const end = endInput === "now" ? new Date : parseDiscordTimestamp(endInput);
 
   let results = [];
 

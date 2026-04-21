@@ -15,7 +15,8 @@ async function getWars(interaction) {
   const tables = await getAllUserTables(db);
 
   const start = parseDiscordTimestamp(interaction.options.getString("start"));
-  const end = parseDiscordTimestamp(interaction.options.getString("end"));
+  const endInput = interaction.options.getString("end");
+  const end = endInput === "now" ? Date.now() : parseDiscordTimestamp(endInput);
 
   let results = [];
 

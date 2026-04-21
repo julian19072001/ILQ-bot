@@ -5,6 +5,10 @@ const { sendPaginatedEmbed } = require("../utils/pagination");
 function formatLine(u) {
   const name = u.username.slice(0, 18).padEnd(18);
 
+  if (u.noAccess) {
+    return `${name} | No API access`.padStart(10);
+  }
+
   const hrs = Math.floor(u.value);
   const mins = Math.round((u.value - hrs) * 60);
 
@@ -16,9 +20,11 @@ async function getActivity(interaction) {
   const tables = await getAllUserTables(db);
 
   const start = parseDiscordTimestamp(interaction.options.getString("start"));
-  const end = parseDiscordTimestamp(interaction.options.getString("end"));
+  const endInput = interaction.options.getString("end");
+  const end = endInput === "now" ? Date.now() : parseDiscordTimestamp(endInput);
 
   let results = [];
+  let noAccess = [];
 
   for (const table of tables) {
     const [rows] = await db.execute(
@@ -40,14 +46,41 @@ async function getActivity(interaction) {
     );
 
     for (const r of rows || []) {
-      const value = Math.max(0, (r.endValue || 0) - (r.startValue || 0));
-      results.push({ username: r.username, value });
+      const startVal = r.startValue || 0;
+      const endVal = r.endValue || 0;
+
+      // 🚨 NO API ACCESS CASE
+      if (endVal === 0) {
+        noAccess.push({
+          username: r.username,
+          value: 0,
+          noAccess: true,
+        });
+        continue;
+      }
+
+      const value = Math.max(0, endVal - startVal);
+
+      results.push({
+        username: r.username,
+        value,
+        noAccess: false,
+      });
     }
   }
 
+  // sort activity (low → high like your original)
   results.sort((a, b) => a.value - b.value);
 
-  return sendPaginatedEmbed(interaction, results, formatLine, "Playtime");
+  // force no-access to top
+  const finalResults = [...noAccess, ...results];
+
+  return sendPaginatedEmbed(
+    interaction,
+    finalResults,
+    formatLine,
+    "Playtime"
+  );
 }
 
 module.exports = { getActivity };
