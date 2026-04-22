@@ -21,7 +21,7 @@ async function getActivity(interaction) {
 
   const start = parseDiscordTimestamp(interaction.options.getString("start"));
   const endInput = interaction.options.getString("end");
-  const end = endInput === "now" ? Date.now() : parseDiscordTimestamp(endInput);
+  const end = endInput === "now" ? new Date : parseDiscordTimestamp(endInput);
 
   let results = [];
   let noAccess = [];
