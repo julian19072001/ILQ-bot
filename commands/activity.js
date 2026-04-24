@@ -49,7 +49,6 @@ async function getActivity(interaction) {
       const startVal = r.startValue || 0;
       const endVal = r.endValue || 0;
 
-      // 🚨 NO API ACCESS CASE
       if (endVal === 0) {
         noAccess.push({
           username: r.username,
@@ -69,10 +68,8 @@ async function getActivity(interaction) {
     }
   }
 
-  // sort activity (low → high like your original)
   results.sort((a, b) => a.value - b.value);
 
-  // force no-access to top
   const finalResults = [...noAccess, ...results];
 
   return sendPaginatedEmbed(
