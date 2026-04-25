@@ -8,6 +8,11 @@ function parseTimeToHours(str) {
   return Number(h) + Number(m) / 60;
 }
 
+function toDateOnly(input) {
+  const d = new Date(input);
+  return d.toISOString().slice(0, 10);
+}
+
 function formatLine(u) {
   const name = u.username.slice(0, 18).padEnd(18);
   const category = (u.category || "Unknown").padEnd(12);
@@ -64,7 +69,7 @@ async function getActivity(interaction) {
 
       const [[info]] = await db.execute(
         `
-        SELECT immune, absent_until
+        SELECT immune, absent_until, absent_from
         FROM setting_additional_info
         WHERE username = ? LIMIT 1
         `,
@@ -80,10 +85,14 @@ async function getActivity(interaction) {
       else if (
         info?.absent_from &&
         info?.absent_until &&
-        end >= new Date(info.absent_from) &&
-        start <= new Date(info.absent_until)
+        info.absent_until >= toDateOnly(start) &&
+        info.absent_from <= toDateOnly(end)
       ) {
         category = "Absent";
+      } 
+      
+      else if (isNewMember) {
+        category = "New member";
       }
 
       if (endVal === 0) {
@@ -111,11 +120,7 @@ async function getActivity(interaction) {
 
       const isNewMember = !beforeStart;
 
-      if (isNewMember) {
-        category = "New member";
-      }
-
-      else if (value < requiredHours) {
+      if (value < requiredHours) {
         category = "Inactive";
       }
 

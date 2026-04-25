@@ -7,6 +7,7 @@ const RAID_MAP = {
   orphion: "orphion",
   grootslangs: "grootslangs",
   anomaly: "anomaly",
+  wartorn: "palace",
   total: "guild_raids_total"
 };
 
@@ -25,7 +26,7 @@ async function getRaids(interaction) {
   const raidKey = interaction.options.getString("raid") || "total";
   const column = RAID_MAP[raidKey];
 
-  if (!column) return interaction.reply("Invalid raid.");
+  if (!column) return interaction.reply("Invalid raid. Use `canyon_colossus` `orphion` `grootslangs` `anomaly` `palace`");
 
   const start = parseDiscordTimestamp(interaction.options.getString("start"));
   const endInput = interaction.options.getString("end");
