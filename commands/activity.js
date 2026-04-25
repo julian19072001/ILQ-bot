@@ -2,6 +2,16 @@ const { getDb, getAllUserTables } = require("../db/mysql");
 const { parseDiscordTimestamp } = require("../utils/time");
 const { sendPaginatedEmbed } = require("../utils/pagination");
 
+const categoryPriority = {
+  "Whitelisted": 6,
+  "Absent": 3,
+  "New member": 4,
+  "Active": 5,
+  "Warn": 2,
+  "Unknown": 0,
+  "Kick": 1
+};
+
 function parseTimeToHours(str) {
   const h = str.match(/(\d+)h/)?.[1] || 0;
   const m = str.match(/(\d+)m/)?.[1] || 0;
@@ -33,13 +43,21 @@ async function getActivity(interaction) {
 
   const start = parseDiscordTimestamp(interaction.options.getString("start"));
   const endInput = interaction.options.getString("end");
-  const end = endInput === "now" ? new Date() : parseDiscordTimestamp(endInput);
+  const end = endInput === "now"
+    ? new Date()
+    : parseDiscordTimestamp(endInput);
 
   const [[timeReqRow]] = await db.execute(
     `SELECT value FROM setting_bot_values WHERE name = 'time_req' LIMIT 1`
   );
 
   const requiredHours = parseTimeToHours(timeReqRow?.value || "0h 0m");
+
+  const [[timeKickRow]] = await db.execute(
+    `SELECT value FROM setting_bot_values WHERE name = 'kick_req' LIMIT 1`
+  );
+
+  const kickHours = parseTimeToHours(timeKickRow?.value || "0h 0m");
 
   let results = [];
   let noAccess = [];
@@ -78,23 +96,6 @@ async function getActivity(interaction) {
 
       let category = "Active";
 
-      if (info?.immune) {
-        category = "Immune";
-      }
-
-      else if (
-        info?.absent_from &&
-        info?.absent_until &&
-        info.absent_until >= toDateOnly(start) &&
-        info.absent_from <= toDateOnly(end)
-      ) {
-        category = "Absent";
-      } 
-      
-      else if (isNewMember) {
-        category = "New member";
-      }
-
       if (endVal === 0) {
         noAccess.push({
           username: r.username,
@@ -107,21 +108,48 @@ async function getActivity(interaction) {
 
       const value = Math.max(0, endVal - startVal);
 
-      const [[beforeStart]] = await db.execute(
-        `
-        SELECT 1
-        FROM \`${table}\`
-        WHERE username = ?
-          AND time_inserted < ?
-        LIMIT 1
-        `,
-        [r.username, start]
-      );
+      const absentFrom = info?.absent_from ? new Date(info.absent_from) : null;
+      const absentUntil = info?.absent_until ? new Date(info.absent_until) : null;
 
-      const isNewMember = !beforeStart;
 
-      if (value < requiredHours) {
-        category = "Inactive";
+      if (info?.immune) {
+        category = "Whitelisted";
+      }
+
+      else if (
+        absentFrom &&
+        absentUntil &&
+        absentUntil >= start &&
+        absentFrom <= end
+      ) {
+        category = "Absent";
+      }
+
+      else {
+        const [[beforeStart]] = await db.execute(
+          `
+          SELECT 1
+          FROM \`${table}\`
+          WHERE username = ?
+            AND time_inserted < ?
+          LIMIT 1
+          `,
+          [r.username, start]
+        );
+
+        const isNewMember = !beforeStart;
+
+        if (isNewMember) {
+          category = "Immune";
+        }
+
+        else if (value < kickHours) {
+          category = "Kick";
+        }
+
+        else if (value < requiredHours) {
+          category = "Warn";
+        }
       }
 
       results.push({
@@ -133,7 +161,14 @@ async function getActivity(interaction) {
     }
   }
 
-  results.sort((a, b) => a.value - b.value);
+  results.sort((a, b) => {
+    if (a.value !== b.value) {
+      return a.value - b.value;
+    }
+
+    return (categoryPriority[a.category] ?? 99) -
+          (categoryPriority[b.category] ?? 99);
+  });
 
   const finalResults = [...noAccess, ...results];
 
