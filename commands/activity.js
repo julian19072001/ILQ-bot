@@ -9,6 +9,7 @@ const categoryPriority = {
   "Active": 5,
   "Warn": 2,
   "Unknown": 0,
+  "Inactive": 1,
   "Kick": 1
 };
 
@@ -16,11 +17,6 @@ function parseTimeToHours(str) {
   const h = str.match(/(\d+)h/)?.[1] || 0;
   const m = str.match(/(\d+)m/)?.[1] || 0;
   return Number(h) + Number(m) / 60;
-}
-
-function toDateOnly(input) {
-  const d = new Date(input);
-  return d.toISOString().slice(0, 10);
 }
 
 function formatLine(u) {
@@ -41,22 +37,28 @@ async function getActivity(interaction) {
   const db = await getDb();
   const tables = await getAllUserTables(db);
 
-  const start = parseDiscordTimestamp(interaction.options.getString("start"));
+  const startInput = interaction.options.getString("start");
   const endInput = interaction.options.getString("end");
+
+  const start = startInput ? parseDiscordTimestamp(startInput) : null;
   const end = endInput === "now"
     ? new Date()
-    : parseDiscordTimestamp(endInput);
+    : endInput
+      ? parseDiscordTimestamp(endInput)
+      : new Date();
+
+  if (!start || !end) {
+    throw new Error("Invalid start or end timestamp");
+  }
 
   const [[timeReqRow]] = await db.execute(
     `SELECT value FROM setting_bot_values WHERE name = 'time_req' LIMIT 1`
   );
-
   const requiredHours = parseTimeToHours(timeReqRow?.value || "0h 0m");
 
   const [[timeKickRow]] = await db.execute(
     `SELECT value FROM setting_bot_values WHERE name = 'kick_req' LIMIT 1`
   );
-
   const kickHours = parseTimeToHours(timeKickRow?.value || "0h 0m");
 
   let results = [];
@@ -65,100 +67,97 @@ async function getActivity(interaction) {
   for (const table of tables) {
     const [rows] = await db.execute(
       `
-      SELECT username,
-             MIN(playtime) AS startValue,
-             MAX(playtime) AS endValue
+      SELECT 
+        MIN(playtime) AS startValue,
+        MAX(playtime) AS endValue,
+        (
+          SELECT username 
+          FROM \`${table}\`
+          WHERE time_inserted <= ?
+          ORDER BY time_inserted DESC
+          LIMIT 1
+        ) AS lastUsername
       FROM \`${table}\`
       WHERE time_inserted BETWEEN ? AND ?
          OR time_inserted = (
            SELECT MAX(time_inserted)
-           FROM \`${table}\` t2
-           WHERE t2.username = \`${table}\`.username
-           AND t2.time_inserted < ?
+           FROM \`${table}\`
+           WHERE time_inserted < ?
          )
-      GROUP BY username
       `,
-      [start, end, start]
+      [end, start, end, start]
     );
 
-    for (const r of rows || []) {
-      const startVal = r.startValue || 0;
-      const endVal = r.endValue || 0;
+    const r = rows?.[0];
+    if (!r) continue;
 
-      const [[info]] = await db.execute(
+    const startVal = r.startValue || 0;
+    const endVal = r.endValue || 0;
+    const username = r.lastUsername || table;
+
+    if (endVal === 0) {
+      noAccess.push({
+        username,
+        value: 0,
+        noAccess: true,
+        category: "Unknown"
+      });
+      continue;
+    }
+
+    const value = Math.max(0, endVal - startVal);
+
+    const [[info]] = await db.execute(
+      `
+      SELECT immune, absent_until, absent_from
+      FROM setting_additional_info
+      WHERE username = ? LIMIT 1
+      `,
+      [username]
+    );
+
+    let category = "Active";
+
+    const absentFrom = info?.absent_from ? new Date(info.absent_from) : null;
+    const absentUntil = info?.absent_until ? new Date(info.absent_until) : null;
+
+    if (info?.immune) {
+      category = "Whitelisted";
+    } else if (
+      absentFrom &&
+      absentUntil &&
+      absentUntil >= start &&
+      absentFrom <= end
+    ) {
+      category = "Absent";
+    } else {
+      const [[beforeStart]] = await db.execute(
         `
-        SELECT immune, absent_until, absent_from
-        FROM setting_additional_info
-        WHERE username = ? LIMIT 1
+        SELECT 1
+        FROM \`${table}\`
+        WHERE time_inserted < ?
+        LIMIT 1
         `,
-        [r.username]
+        [start]
       );
 
-      let category = "Active";
+      const isNewMember = !beforeStart;
 
-      if (endVal === 0) {
-        noAccess.push({
-          username: r.username,
-          value: 0,
-          noAccess: true,
-          category: "Unknown"
-        });
-        continue;
+      if (isNewMember) {
+        category = "New member";
+      } else if (value < kickHours) {
+        category = kickHours === requiredHours ? "Inactive" : "Kick";
+      } else if (value < requiredHours) {
+        category = "Warn";
       }
-
-      const value = Math.max(0, endVal - startVal);
-
-      const absentFrom = info?.absent_from ? new Date(info.absent_from) : null;
-      const absentUntil = info?.absent_until ? new Date(info.absent_until) : null;
-
-
-      if (info?.immune) {
-        category = "Whitelisted";
-      }
-
-      else if (
-        absentFrom &&
-        absentUntil &&
-        absentUntil >= start &&
-        absentFrom <= end
-      ) {
-        category = "Absent";
-      }
-
-      else {
-        const [[beforeStart]] = await db.execute(
-          `
-          SELECT 1
-          FROM \`${table}\`
-          WHERE username = ?
-            AND time_inserted < ?
-          LIMIT 1
-          `,
-          [r.username, start]
-        );
-
-        const isNewMember = !beforeStart;
-
-        if (isNewMember) {
-          category = "Immune";
-        }
-
-        else if (value < kickHours) {
-          category = "Kick";
-        }
-
-        else if (value < requiredHours) {
-          category = "Warn";
-        }
-      }
-
-      results.push({
-        username: r.username,
-        value,
-        noAccess: false,
-        category
-      });
     }
+
+    results.push({
+      username,
+      value,
+      noAccess: false,
+      category
+    });
   }
 
   results.sort((a, b) => {
@@ -167,7 +166,7 @@ async function getActivity(interaction) {
     }
 
     return (categoryPriority[a.category] ?? 99) -
-          (categoryPriority[b.category] ?? 99);
+           (categoryPriority[b.category] ?? 99);
   });
 
   const finalResults = [...noAccess, ...results];
