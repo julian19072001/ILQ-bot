@@ -8,5 +8,7 @@ function parseDiscordDate(input) {
   return input.slice(0, -3) + ":D>";
 }
 
+const toDiscordTimestamp = (date) => `<t:${Math.floor(date.getTime() / 1000)}:f>`;
 
-module.exports = { parseDiscordTimestamp, parseDiscordDate };
+
+module.exports = { parseDiscordTimestamp, parseDiscordDate, toDiscordTimestamp };

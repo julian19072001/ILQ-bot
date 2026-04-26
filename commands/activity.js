@@ -4,8 +4,8 @@ const { sendPaginatedEmbed } = require("../utils/pagination");
 
 const categoryPriority = {
   "Whitelisted": 6,
-  "Absent": 3,
-  "New member": 4,
+  "Absent": 4,
+  "New member": 3,
   "Active": 5,
   "Warn": 2,
   "Unknown": 0,
@@ -40,12 +40,15 @@ async function getActivity(interaction) {
   const startInput = interaction.options.getString("start");
   const endInput = interaction.options.getString("end");
 
-  const start = startInput ? parseDiscordTimestamp(startInput) : null;
-  const end = endInput === "now"
-    ? new Date()
-    : endInput
-      ? parseDiscordTimestamp(endInput)
-      : new Date();
+  const now = new Date();
+
+  const start = startInput
+    ? parseDiscordTimestamp(startInput)
+    : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
+
+  const end = endInput
+    ? parseDiscordTimestamp(endInput)
+    : now;
 
   if (!start || !end) {
     throw new Error("Invalid start or end timestamp");
@@ -95,7 +98,7 @@ async function getActivity(interaction) {
     const endVal = r.endValue || 0;
     const username = r.lastUsername || table;
 
-    if (endVal === 0) {
+    if (endVal === 0 || startVal === 0) {
       noAccess.push({
         username,
         value: 0,

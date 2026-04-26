@@ -14,9 +14,22 @@ async function getXp(interaction) {
   const db = await getDb();
   const tables = await getAllUserTables(db);
 
-  const start = parseDiscordTimestamp(interaction.options.getString("start"));
+  const startInput = interaction.options.getString("start");
   const endInput = interaction.options.getString("end");
-  const end = endInput === "now" ? new Date : parseDiscordTimestamp(endInput);
+
+  const now = new Date();
+
+  const start = startInput
+    ? parseDiscordTimestamp(startInput)
+    : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
+
+  const end = endInput
+    ? parseDiscordTimestamp(endInput)
+    : now;
+
+  if (!start || !end) {
+    throw new Error("Invalid start or end timestamp");
+  }
 
   let results = [];
 

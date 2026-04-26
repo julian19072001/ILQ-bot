@@ -14,6 +14,8 @@ const { getWars } = require("./commands/wars");
 const { getRaids } = require("./commands/raids");
 const { setAbsence, getAbsenceList } = require("./commands/absence");
 const { setWhitelist, removeWhitelist, getWhitelistList } = require("./commands/whitelist");
+const { updateWarnReq, updateKickReq } = require("./commands/setup");
+const { getPlayerStats } = require("./commands/getuser");
 
 const client = new Client({
   intents: [
@@ -26,7 +28,7 @@ const client = new Client({
 });
 
 const PUBLIC_COMMANDS = [
-  "1",
+  "get_user",
   "2",
   "3"
 ];
@@ -89,6 +91,13 @@ client.on("interactionCreate", async (interaction) => {
     if (sub === "remove") return removeWhitelist(interaction);
     if (sub === "list") return getWhitelistList(interaction);
   }
+  if (interaction.commandName === "setup") {
+    const sub = interaction.options.getSubcommand();
+
+    if (sub === "kick_time") return updateKickReq(interaction);
+    if (sub === "warn_time") return updateWarnReq(interaction);
+  }
+  if (interaction.commandName === "get_user") return getPlayerStats(interaction);
 });
 
 // COMMANDS
@@ -99,12 +108,12 @@ const commands = [
     .addStringOption(o =>
       o.setName("start")
         .setDescription("Start time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     )
     .addStringOption(o =>
       o.setName("end")
         .setDescription("End time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
@@ -113,12 +122,12 @@ const commands = [
     .addStringOption(o =>
       o.setName("start")
         .setDescription("Start time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     )
     .addStringOption(o =>
       o.setName("end")
         .setDescription("End time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
@@ -127,12 +136,12 @@ const commands = [
     .addStringOption(o =>
       o.setName("start")
         .setDescription("Start time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     )
     .addStringOption(o =>
       o.setName("end")
         .setDescription("End time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder()
@@ -142,13 +151,13 @@ const commands = [
     .addStringOption(o =>
       o.setName("start")
         .setDescription("Start time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     )
 
     .addStringOption(o =>
       o.setName("end")
         .setDescription("End time <t:...>")
-        .setRequired(true)
+        .setRequired(false)
     )
 
     .addStringOption(o =>
@@ -208,6 +217,52 @@ const commands = [
       sub
         .setName("list")
         .setDescription("get whitelist list")
+    ),
+
+    new SlashCommandBuilder()
+    .setName("setup")
+    .setDescription("Setup bot values")
+    .addSubcommand(sub =>
+      sub
+        .setName("kick_time")
+        .setDescription("Set time before which a user should be tagged with [kick]")
+        .addStringOption(o =>
+          o.setName("time")
+            .setDescription("Time limit, format: {*h **m}")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName("warn_time")
+        .setDescription("Set time before which a user should be tagged with [warn]")
+        .addStringOption(o =>
+          o.setName("time")
+            .setDescription("Time limit, format: {*h **m}")
+            .setRequired(true)
+        )
+    ),
+
+    new SlashCommandBuilder()
+    .setName("get_user")
+    .setDescription("Get all stats from a specific username")
+
+    .addStringOption(o =>
+      o.setName("username")
+        .setDescription("Get all information from specific user")
+        .setRequired(true)
+    )
+
+    .addStringOption(o =>
+      o.setName("start")
+        .setDescription("Start time <t:...>")
+        .setRequired(false)
+    )
+
+    .addStringOption(o =>
+      o.setName("end")
+        .setDescription("End time <t:...>")
+        .setRequired(false)
     )
 ];
 

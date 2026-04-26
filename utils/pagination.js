@@ -1,3 +1,5 @@
+const { parseDiscordTimestamp, toDiscordTimestamp } = require("../utils/time");
+
 async function sendPaginatedEmbed(interaction, results, formatLine, title) {
   const pageSize = 20;
   const pages = [];
@@ -15,11 +17,24 @@ async function sendPaginatedEmbed(interaction, results, formatLine, title) {
 
   let page = 0;
 
+  const startInput = interaction.options.getString("start");
+  const endInput = interaction.options.getString("end");
+
+  const now = new Date();
+
+  const start = startInput
+    ? parseDiscordTimestamp(startInput)
+    : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
+
+  const end = endInput
+    ? parseDiscordTimestamp(endInput)
+    : now;
+
   const createEmbed = (pageIndex) => ({
     title: `${title} (${pageIndex + 1}/${pages.length})`,
     description:
-      `From: ${interaction.options.getString("start")}\n` +
-      `Until: ${interaction.options.getString("end")}\n\n` +
+      `From: ${toDiscordTimestamp(start)}\n` +
+      `Until: ${toDiscordTimestamp(end)}\n\n` +
       "```text\n" +
       pages[pageIndex].map(formatLine).join("\n") +
       "\n```",
